@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class ParallelFor {
 
-  private static int CPUs = Math.min(Runtime.getRuntime().availableProcessors(), 40);
+  private static int CPUs = 1;
   private static ExecutorService executor = Executors.newFixedThreadPool(CPUs);
 
   public interface Each {

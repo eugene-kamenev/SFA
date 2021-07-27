@@ -222,7 +222,7 @@ public class TimeSeriesLoader {
     return (derivatives)? getDerivatives(m) : m;
   }
 
-  protected static MultiVariateTimeSeries[] getDerivatives(MultiVariateTimeSeries[] mtsSamples) {
+  public static MultiVariateTimeSeries[] getDerivatives(MultiVariateTimeSeries[] mtsSamples) {
     for (MultiVariateTimeSeries mts : mtsSamples) {
       TimeSeries[] deltas = new TimeSeries[2 * mts.timeSeries.length];
       TimeSeries[] samples = mts.timeSeries;

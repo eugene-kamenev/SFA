@@ -9,9 +9,8 @@ import sfa.timeseries.TimeSeries;
 import sfa.transformation.MUSE;
 import sfa.transformation.SFA;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The WEASEL+MUSE classifier as published in
@@ -42,7 +41,7 @@ public class MUSEClassifier extends Classifier {
   public static int MAX_WINDOW_LENGTH = 450;
 
   // the trained muse model
-  MUSEModel model;
+  public MUSEModel model;
 
   public MUSEClassifier() {
     super();
@@ -159,6 +158,39 @@ public class MUSEClassifier extends Classifier {
     return Math.min(max, MAX_WINDOW_SIZE);
   }
 
+  public Predictions predictProbabilities(MultiVariateTimeSeries[] samples) {
+    FeatureNode[][] features = createFeatures(samples);
+    double[][] probabilities = new double[samples.length][model.linearModel.getNrClass()];
+    final Double[] labels = new Double[samples.length];
+    ParallelFor.withIndex(BLOCKS, new ParallelFor.Each() {
+      @Override
+      public void run(int id, AtomicInteger processed) {
+        for (int ind = 0; ind < features.length; ind++) {
+          if (ind % BLOCKS == id) {
+            labels[ind] = Linear.predictProbability(model.linearModel, features[ind], probabilities[ind]);
+          }
+        }
+      }
+    });
+
+    return new Predictions(labels, probabilities, model.linearModel.getLabels());
+  }
+
+  public List<Map<Double, Double>> predictProb(MultiVariateTimeSeries[] samples) {
+    FeatureNode[][] features = createFeatures(samples);
+    double[][] probabilities = new double[samples.length][model.linearModel.getNrClass()];
+    List<Map<Double, Double>> classHist = new ArrayList<>();
+    for (int ind = 0; ind < features.length; ind++) {
+      Linear.predictProbability(model.linearModel, features[ind], probabilities[ind]);
+      Map<Double, Double> labelAndProb = new HashMap<>();
+      for (int l = 0; l < model.linearModel.getLabels().length; l++) {
+        labelAndProb.put((double) model.linearModel.getLabels()[l], probabilities[ind][l]);
+      }
+      classHist.add(labelAndProb);
+    }
+    return classHist;
+  }
+
   public MUSEModel fitMuse(final MultiVariateTimeSeries[] samples) {
     int dimensionality = samples[0].getDimensions();
     try {
@@ -173,7 +205,7 @@ public class MUSEClassifier extends Classifier {
           int[] windowLengths = getWindowLengths(samples, mean);
 
           for (int f = minF; f <= maxF; f += 2) {
-            final MUSE model = new MUSE(f, maxS, histType, windowLengths, mean, lowerBounding);
+            final MUSE model = newMUSE(f, maxS, histType, windowLengths, mean, lowerBounding);
             MUSE.BagOfBigrams[] bag = null;
 
             for (int w = 0; w < model.windowLengths.length; w++) {
@@ -210,7 +242,7 @@ public class MUSEClassifier extends Classifier {
       final int[] windowLengths = getWindowLengths(samples, bestNorm);
 
       // obtain the final matrix
-      MUSE model = new MUSE(bestF, maxS, bestHistType, windowLengths, bestNorm, lowerBounding);
+      MUSE model = newMUSE(bestF, maxS, bestHistType, windowLengths, bestNorm, lowerBounding);
       MUSE.BagOfBigrams[] bob = null;
 
       for (int w = 0; w < model.windowLengths.length; w++) {
@@ -248,13 +280,17 @@ public class MUSEClassifier extends Classifier {
     return null;
   }
 
+  protected MUSE newMUSE(int maxF, int maxS, SFA.HistogramType histType, int[] wLengths, boolean mean, boolean lowerBounding) {
+      return new MUSE(maxF, maxS, histType, wLengths, mean, lowerBounding);
+  }
+
   private MUSE.BagOfBigrams[] fitOneWindow(
       MultiVariateTimeSeries[] samples,
       int[] windowLengths, boolean mean,
       SFA.HistogramType histType,
       MUSE model,
       int[][] word, int f, int dimensionality, int w) {
-    MUSE modelForWindow = new MUSE(f, maxS, histType, windowLengths, mean, lowerBounding);
+    MUSE modelForWindow = newMUSE(f, maxS, histType, windowLengths, mean, lowerBounding);
 
     MUSE.BagOfBigrams[] bopForWindow = modelForWindow.createBagOfPatterns(word, samples, w, dimensionality, f);
     modelForWindow.trainChiSquared(bopForWindow, chi);
@@ -289,6 +325,18 @@ public class MUSEClassifier extends Classifier {
   }
 
   public Double[] predict(final MultiVariateTimeSeries[] samples) {
+    FeatureNode[][] features = createFeatures(samples);
+
+    Double[] labels = new Double[samples.length];
+    for (int ind = 0; ind < features.length; ind++) {
+      double label = Linear.predict(model.linearModel, features[ind]);
+      labels[ind] = label;
+    }
+
+    return labels;
+  }
+
+  public FeatureNode[][] createFeatures(final MultiVariateTimeSeries[] samples) {
     // iterate each sample to classify
     int dimensionality = samples[0].getDimensions();
 
@@ -300,15 +348,7 @@ public class MUSEClassifier extends Classifier {
       bagTest = mergeBobs(bagTest, bopForWindow);
     }
 
-    FeatureNode[][] features = initLibLinear(bagTest, model.muse.dict);
-
-    Double[] labels = new Double[samples.length];
-    for (int ind = 0; ind < features.length; ind++) {
-      double label = Linear.predict(model.linearModel, features[ind]);
-      labels[ind] = label;
-    }
-
-    return labels;
+    return initLibLinear(bagTest, model.muse.dict);
   }
 
   public static Problem initLibLinearProblem(

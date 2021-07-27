@@ -51,7 +51,7 @@ public abstract class Classifier {
   public static int folds = 10;
 
   // Blocks for parallel execution
-  public final static int BLOCKS = 8;
+  public static int BLOCKS = 8;
 
   static {
     Runtime runtime = Runtime.getRuntime();
@@ -317,8 +317,8 @@ public abstract class Classifier {
     public Double[] labels;
     public AtomicInteger correct;
 
-    double[][] probabilities;
-    int[] realLabels;
+    public double[][] probabilities;
+    public int[] realLabels;
 
 
     public Predictions(Double[] labels, int bestCorrect) {

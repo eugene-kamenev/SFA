@@ -77,6 +77,9 @@ public class MUSE {
     this.histogramType = histogramType;
   }
 
+  public MUSE() {
+  }
+
   /**
    * The MUSE model: a histogram of SFA word and bi-gram frequencies
    */
@@ -112,6 +115,10 @@ public class MUSE {
     return words;
   }
 
+  protected SFA newSFA() {
+    return new SFA(this.histogramType, false);
+  }
+
   /**
    * Create SFA words and bigrams for all samples
    *
@@ -122,9 +129,9 @@ public class MUSE {
 
     // SFA quantization
     if (this.signature[index] == null) {
-      this.signature[index] = new SFA[mtsSamples[0].getDimensions()]; 
+      this.signature[index] = new SFA[mtsSamples[0].getDimensions()];
       for (int i = 0; i < this.signature[index].length; i++) {
-        this.signature[index][i] = new SFA(this.histogramType, false); // TODO true?
+        this.signature[index][i] = newSFA();
         this.signature[index][i].fitWindowing(
             mtsSamples, this.windowLengths[index], this.maxF, this.alphabetSize, this.normMean, this.lowerBounding, i);
       }
@@ -159,6 +166,9 @@ public class MUSE {
       this.dim = dim;
       this.word = word;
       this.word2 = word2;
+    }
+
+    public MuseWord() {
     }
 
     @Override
